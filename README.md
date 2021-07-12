@@ -2,7 +2,7 @@
 These files contain the code and data necessary to replicate the results from Del Negro, Hasegawa, and Schorfheide ([2016](https://www.sciencedirect.com/science/article/abs/pii/S0304407616300094#:~:text=This%20dynamic%20linear%20prediction%20pool,to%20lie%20on%20a%20simplex.&text=These%20pools%20are%20optimal%20in,the%20pool's%20historic%20forecast%20performance)). We provide the data used to produce the results of the original paper as well as the corrected data used to produce the results contained in the [corrigendum](). 
 
 ## Installation
-Matlab14a is required to run these files locally on your machine. To run the files, download them from this github repository. No further installation is necessary. 
+MATLAB14a is required to run these files locally on your machine. To run the files, download them from this github repository. No further installation is necessary. 
 
 ## Usage
 To replicate the results shown in the corrigendum, follow this workflow.
@@ -39,3 +39,55 @@ will utilize the ones that are provided by this replication folder.
   *  `estim_fn = "wrongorigmatlab"`, `prior = 3` -> Row 5 of Table 1.
   *  `estim_fn =  "right805orig904"`, `prior = 3` -> Row 6 of Table 1. 
 * Run `make_fig8.m` to create Figure 8. To replicate the figure exactly, you must set `use_matlab_draws = true`.
+
+## Directory Structure 
+* `matlab_files/`: MATLAB scripts for 
+  * computing predictive densities from processed real-time data
+  * estimating dynamic pool, static pool, and BMA
+  * plotting results, contained within \path{make_plots}
+* `matlab_save_files/`: common directory for MATLAB output files produced from MATLAB scripts
+    * mat files containing parameter and lambda draws specified by data vintage and prior
+    * mat files containing static lambda values specified by data vintage 
+
+## Description of MATLAB Files
+The MATLAB code can be partitioned into 5 parts: computing predictive density, estimation using a pooling method, analysis of estimation results, plotting, and helper functions. Below, we provide brief descriptions of most scripts found in `matlab_files/`.
+* Predictive Density code
+    * `calcPredDens.m`: master script for computing predictive density, given model and observables data
+    *  `dsge_solution/`: folder of scripts related to solution of DSGEs (from structural matrices to reduced form)
+    *  `predDens.m`: function computing $h$-step ahead predictive density
+* Pooling master scripts
+    * `compute_bma.m`: compute BMA weights 
+    * `static_recursive.m`: compute real-time static pool estimation to obtain the real-time posterior
+    * `parameter_inference.m`: compute dynamic pool estimation for a given information set
+    * `recursive_inference.m`: compute real-time dynamic pool estimation  to obtain the real-time posterior
+* Pooling code 
+    * `pmmh2.m`: estimates the dynamic pool hyperparameters using Metropolis-Hastings with a particle filter
+    * `pmmh.m`: estimates the Bayesian static pool parameter $\lambda$ using Metropolis-Hastings
+    *  `fnPoolFilter.m`: particle filter (for likelihood calculation) 
+    *  `logLikStatic.m`: likelihood function for static pool
+    *  `gen_prior.m`: construct prior function handles for code computing priors found in `priors/`
+    *   `gen_prop.m`: construct proposal distribution for Metropolis-Hastings
+    *   `lamfcast.m`: forecast of `lambda_t` in h-periods
+* Analysis code
+    * `hist_evol.m`: function for computing 3D histogram
+    * `produce_3d_histogram.m`: script for producing the 3D evolution histogram of posterior using output from MATLAB estimations
+* Plotting code within `make_plots/`
+    * `make_plots.m`: script for producing plots within the corrigendum
+    * `estimate_bma.m`: function used to for plotting bma results.
+    * `make_fig8.m`: script for producing figure 8 from the corrigendum.
+    * `rgb.m`: helper function for translating colors to rgb values while plotting.
+* Helper functions
+    * `script_wrap_fn.m`: wrapper function assisting `recursive_inference.m`
+    * `selectEst.m`: load estimation results
+    * `testVars.m`: determines for which variables to compute predictive densities and what kind of densities
+* Other helper folders
+    * `input_data/`:
+        * holds input data to compute predictive densities
+        * output directory for predictive densities since the pooling methods use these densities as inputs
+    * `model_spec/`: spec files for DSGE models
+    * `pool_spec/`: spec files for dynamic pools
+    * `priors/`: holds functions that compute prior densities
+    * `Procedures/`:
+        *  multinomial resampling
+        *  `rgb.m` function
+    * `rtnormM/`: pseudorandom numbers from a truncated Gaussian distribution
