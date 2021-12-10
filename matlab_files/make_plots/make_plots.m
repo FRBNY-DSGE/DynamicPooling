@@ -1,7 +1,7 @@
-
+clear;
 
 % Choose settings for what you want to plot.
-estim_fn = 'right805orig904'; % should be either 'wrongorigmatlab' or 'right805orig904'
+estim_fn = 'wrongorigmatlab'; % should be either 'wrongorigmatlab' or 'right805orig904'
 prior = 1; % should be either 1, 2, or 3
 static_vintage = '210615'; % vintage date of estimation for static pool
 vintage_date   = '210615'; % vintage date of estimationfor dynamic pool & predictive densities
@@ -26,23 +26,50 @@ elseif (strcmp(estim_fn, 'right805orig904'))
     end 
 end
 
+
+% load in data
 data = readtable('../input_data/data_dsid=1922016_vint=210615.csv');
 dates = table2array(data(:,1));
 data = table2array(data(:,2:3));
+
+% load in predictive densities for BMA calculation
+testName = 'output_and_inflation_annualized';
+
+f904 = fopen(['../input_data/predictive_density_means_904_10-Jan-1992_to_10-Apr-2011_',testName,'_semicond'],'r');
+
+if strcmp(estim_fn, 'wrongorigmatlab')
+    f805 = fopen(['../input_data/predictive_density_means_805_10-Jan-1992_to_10-Apr-2011_',testName, '_semicond'],'r');
+else
+    f805 = fopen(['../input_data/predictive_density_means_805_10-Jan-1992_to_10-Apr-2011_',testName,'_semicond','_correct'],'r');
+end
+
+p904 = fread(f904,'single');
+p805 = fread(f805,'single');
+fd904 = fopen(['../input_data/predictive_density_fdates_904_10-Jan-1992_to_10-Apr-2011_',testName, '_semicond'],'r');
+dt    = fread(fd904,'single');
+
+T = length(dt);
+
+% calculate BMA weights 
+bma_lams = zeros(T, 1);
+bma_lams(1) = 0.5 * p904(1) / (0.5 * p904(1) + (1 - 0.5) * p805(1));
+for t = 2:T
+	bma_lams(t) = bma_lams(t-1) * p904(t) / (bma_lams(t-1) * p904(t) + (1 - bma_lams(t-1)) * p805(t));
+end
+
+% compute log scores for bayesian model averaging 
+bma_logscore_t = log(bma_lams .* data(:,1) + (1 - bma_lams) .* data(:,2));
+bma_logscore   =  sum(log(bma_lams(1:end-4) .* data(5:end,1) + ...
+                           (1 - bma_lams(1:end-4)) .* data(5:end,2)));
+disp('bma logscore')
+disp(bma_logscore)
+
 %%% compute logscore for equal weighting (lambda = 0.5)
 % compute 0.5 * data(i,1) + 0.5 * data(i,2) for all i
 lambda_equal = 0.5 * ones(78,2);
 ew_logscore_t = log(dot(lambda_equal, data,2));
 
 equal_logscore = sum(ew_logscore_t(5:end));
-
-%%% BMA
-% compute lambdas 
-bma_lams       = estimate_bma(data, 0.5);
-% compute log scores for bayesian model averaging 
-bma_logscore_t = log(bma_lams .* data(:,1) + (1 - bma_lams) .* data(:,2));
-bma_logscore   =  sum(log(bma_lams(1:end-4) .* data(5:end,1) + ...
-                           (1 - bma_lams(1:end-4)) .* data(5:end,2)));
 
 %%%% Static Weights
 % set file path based on prior 
@@ -62,9 +89,7 @@ for t = 1:size(data,1)
     logscores = zeros(size(lams));
     
     for t1 = 1:t
-        logscores = logscores +  log(lams .* data(t1,1) + (1 - lams) .* data(t1,2));
-        test = log(lams .* data(t1,1) + (1 - lams) .* data(t1,2));
-        
+          logscores = logscores +  log(lams .* p904(t1) + (1 - lams) .* p805(t1));
     end
     [argvalue, argmax] = max(logscores);
     static_lams(t) = lams(argmax);
@@ -77,6 +102,8 @@ static_logscore = sum(static_logscore_t);
 expost_static_logscore = sum(log(static_lams .* data(:,1) + ...
     (1 - static_lams) .* data(:,2)));
 
+disp('static logscore')
+disp(static_logscore)
 
 % load in lambda and para draws for dynamic pooling 
 para_draws_fp = sprintf('../../matlab_save_files/draws_para_vint=%s_R_%s.mat', draws_vint, pm_ss);
@@ -107,8 +134,8 @@ for t = 1:78
     else
         
         for hstep = 1:4
-            lamhat_tplush(:,t) = cdf(pd, norminv(lamhat_tplush(:,t)) .* para_draws(:,1,1) + ...
-            (1 - para_draws(:,1,t)) .* para_draws(:,3,t));
+            lamhat_tplush(:,t) = cdf(pd, norminv(lamhat_tplush(:,t)) .* para_draws(:,1,t) + ...
+            (1 - para_draws(:,1,t)) .* para_draws(:,2,t));
         end
     end
     
@@ -126,6 +153,9 @@ dp_logscore_t_rho = log(lam_rho' .* data(:,1) + (1 - lam_rho') .* data(:,2));
 dp_logscore     = sum(log(lams(1:end-4)' .* data(5:end,1) + (1 - lams(1:end-4)') .* data(5:end,2)));
 dp_logscore_rho = sum(log(lam_rho(1:end-4)' .* data(5:end,1) + ... 
     (1 - lam_rho(1:end-4)') .* data(5:end,2)));
+
+disp('dp_logscore')
+disp(dp_logscore)
 
 
 %%% We can now make our figures 
@@ -235,5 +265,3 @@ fig5_fp = sprintf('figures/log_pred_dens_relative_preddens=%s_prior=%d_vint=%s.p
     estim_fn, prior, vintage_date);
 saveas(fig5, fig5_fp);
 hold off;
-
-
